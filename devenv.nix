@@ -3,6 +3,8 @@
 let
   garrys-mod = builtins.getFlake "github:vnprc/bitcoin-garrys-mod";
   bitcoind = garrys-mod.packages.${pkgs.system}.gmodBitcoind;
+  datadir = "./data";
+  conf = ./config/bitcoin.conf;
 in
 {
   packages = [
@@ -14,9 +16,11 @@ in
   languages.rust.enable = true;
 
   processes.bitcoind.exec = ''
-    ${bitcoind}/bin/bitcoind \
-      -regtest -txindex=1 -fallbackfee=0.0001 \
-      -rpcuser=admin -rpcpassword=password \
-      -rpcbind=127.0.0.1 -rpcallowip=127.0.0.1
+    mkdir -p ${datadir}
+    ${bitcoind}/bin/bitcoind -datadir=${datadir} -conf=${conf}
+  '';
+
+  enterShell = ''
+    alias bitcoin-cli='bitcoin-cli -datadir=${datadir} -conf=${conf} -regtest'
   '';
 }
