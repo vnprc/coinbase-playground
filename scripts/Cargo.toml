@@ -1,0 +1,11 @@
+[package]
+name = "scripts"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitcoincore-rpc = "0.18"
+
+[[bin]]
+name = "mine_and_send"
+path = "src/mine_and_send.rs"
