@@ -1,10 +1,11 @@
+use std::path::Path;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use bitcoincore_rpc::bitcoin::{Address, Amount, Network};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rpc = Client::new(
         "http://127.0.0.1:18443",
-        Auth::UserPass("admin".into(), "password".into()),
+        Auth::CookieFile(Path::new("./data/regtest/.cookie").to_path_buf()),
     )?;
     
     let wallet_name = "devwallet";

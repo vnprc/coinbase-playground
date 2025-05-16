@@ -2,3 +2,4 @@
 .devenv.flake.nix
 data
 target
+electrs-db
