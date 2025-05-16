@@ -11,6 +11,10 @@ in
   packages = [
     bitcoind
     pkgs.electrs
+    pkgs.nodejs
+    pkgs.nodePackages.npm
+    pkgs.nodePackages.serve
+    pkgs.miniserve
     pkgs.openssl
     pkgs.pkg-config
   ];
@@ -35,6 +39,12 @@ in
       --daemon-dir ${datadir} \
       --db-dir ./electrs-db \
       --conf ${electrsConf}
+  '';
+
+  processes.esplora-ui.exec = ''
+    ${pkgs.nodePackages.serve}/bin/serve \
+      -l 5000 \
+      -s esplora-frontend
   '';
 
   enterShell = ''
