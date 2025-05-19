@@ -32,8 +32,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keypair = Keypair::new(&secp, &mut rand::thread_rng());
     let (xonly_pubkey, _) = XOnlyPublicKey::from_keypair(&keypair);
 
-    // hardcoded config
-    // ⚠️ fee rate in sats/vbyte
     let fee_rate = 1;
 
     let ctv_spend_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
@@ -101,42 +99,8 @@ fn build_ctv_contract(
 ) -> Result<(TaprootSpendInfo, Address, Transaction, bitcoin::ScriptBuf), Box<dyn std::error::Error>> {
     let output_count = 50;
 
-    // Step 1: Build placeholder outputs to measure tx size
-    let mut dummy_outputs = vec![TxOut {
-        value: Amount::from_sat(0),
-        script_pubkey: ctv_spend_address.script_pubkey(),
-    }; output_count];
+    let fee = calculate_fee(secp, xonly, fee_rate, output_count, ctv_spend_address)?;
 
-    let dummy_ctv_hash = calc_ctv_hash(&dummy_outputs, None);
-    let dummy_ctv_script = Builder::new()
-        .push_slice(&dummy_ctv_hash)
-        .push_opcode(OP_CTV)
-        .into_script();
-
-    let dummy_taproot_info = TaprootBuilder::new()
-        .add_leaf(0, dummy_ctv_script.clone())
-        .unwrap()
-        .finalize(secp, xonly)
-        .unwrap();
-
-    let _dummy_address = Address::p2tr_tweaked(dummy_taproot_info.output_key(), Network::Regtest);
-
-    let mut dummy_tx = Transaction {
-        version: bitcoin::transaction::Version(3),
-        lock_time: bitcoin::absolute::LockTime::ZERO,
-        input: vec![TxIn {
-            previous_output: OutPoint::null(),
-            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-            witness: bitcoin::Witness::default(),
-            script_sig: bitcoin::ScriptBuf::new(),
-        }],
-        output: dummy_outputs.clone(),
-    };
-
-    let vsize = serialize(&dummy_tx).len(); // Not exact but close enough for 1sat/vB
-    let fee = vsize as u64 * fee_rate;
-
-    // Step 2: Now calculate real output value and build final tx
     let per_output_value = (input_value_sat - fee) / output_count as u64;
 
     let mut outputs = vec![];
@@ -174,6 +138,48 @@ fn build_ctv_contract(
     };
 
     Ok((taproot_info, ctv_address, spend_tx, ctv_script))
+}
+
+fn calculate_fee(
+    secp: &Secp256k1<bitcoin::secp256k1::All>,
+    xonly: XOnlyPublicKey,
+    fee_rate: u64,
+    output_count: usize,
+    ctv_spend_address: &Address,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    let dummy_outputs = vec![TxOut {
+        value: Amount::from_sat(0),
+        script_pubkey: ctv_spend_address.script_pubkey(),
+    }; output_count];
+
+    let dummy_ctv_hash = calc_ctv_hash(&dummy_outputs, None);
+    let dummy_ctv_script = Builder::new()
+        .push_slice(&dummy_ctv_hash)
+        .push_opcode(OP_CTV)
+        .into_script();
+
+    let dummy_taproot_info = TaprootBuilder::new()
+        .add_leaf(0, dummy_ctv_script)
+        .unwrap()
+        .finalize(secp, xonly)
+        .unwrap();
+
+    let _dummy_address = Address::p2tr_tweaked(dummy_taproot_info.output_key(), Network::Regtest);
+
+    let dummy_tx = Transaction {
+        version: bitcoin::transaction::Version(3),
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint::null(),
+            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+            witness: bitcoin::Witness::default(),
+            script_sig: bitcoin::ScriptBuf::new(),
+        }],
+        output: dummy_outputs,
+    };
+
+    let vsize = serialize(&dummy_tx).len();
+    Ok(vsize as u64 * fee_rate)
 }
 
 fn calc_ctv_hash(outputs: &[TxOut], timeout: Option<u32>) -> [u8; 32] {
