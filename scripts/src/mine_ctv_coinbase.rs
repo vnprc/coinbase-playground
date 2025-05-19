@@ -89,6 +89,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let txid = rpc.send_raw_transaction(tx_hex)?;
     println!("Broadcasted txid: {txid}");
 
+    // mine it
+    rpc.generate_to_address(1, &ctv_spend_address)?;
+    println!("Mined txid: {txid}");
+
     Ok(())
 }
 
