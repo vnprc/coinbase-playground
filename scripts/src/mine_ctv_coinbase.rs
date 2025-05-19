@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::str::FromStr;
 
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use bitcoin::{
@@ -7,12 +6,12 @@ use bitcoin::{
     consensus::{Encodable, encode::serialize_hex},
     hashes::{sha256, Hash},
     key::{Keypair, Secp256k1},
-    opcodes::all::{OP_RETURN, OP_NOP4},
     script::Builder,
     taproot::{TaprootBuilder, TaprootSpendInfo, LeafVersion},
     Opcode, XOnlyPublicKey, Sequence,
 };
 
+use bitcoin::opcodes::all::OP_NOP4;
 const OP_CTV: Opcode = OP_NOP4;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,13 +32,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (xonly_pubkey, _) = XOnlyPublicKey::from_keypair(&keypair);
 
     // hardcoded config
-    let spend_value = 1577;
-    let anchor_value = 240;
-    let fee = 500;
+    // TODO dynamically calculate fees
+    let estimated_vsize = 900;
+    let relay_fee_rate = 2;
+    let fee = estimated_vsize * relay_fee_rate;
 
     let ctv_spend_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
-    let anchor_address = Address::from_str("bcrt1pfeesnyr2tx")?.require_network(Network::Regtest)?;
-    let change_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
 
     // ⚠️ Mine a dummy block to get the actual coinbase value
     let dummy_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
@@ -53,12 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &secp,
         xonly_pubkey,
         actual_coinbase_value,
-        spend_value,
-        anchor_value,
         fee,
         &ctv_spend_address,
-        &anchor_address,
-        &change_address,
     )?;
 
     // Mine coinbase to actual CTV address
@@ -108,40 +102,19 @@ fn build_ctv_contract(
     secp: &Secp256k1<bitcoin::secp256k1::All>,
     xonly: XOnlyPublicKey,
     input_value_sat: u64,
-    spend_value: u64,
-    anchor_value: u64,
     fee: u64,
     ctv_spend_address: &Address,
-    anchor_address: &Address,
-    change_address: &Address,
 ) -> Result<(TaprootSpendInfo, Address, Transaction, bitcoin::ScriptBuf), Box<dyn std::error::Error>> {
-    let ctv_output = TxOut {
-        value: Amount::from_sat(spend_value - anchor_value),
-        script_pubkey: ctv_spend_address.script_pubkey(),
-    };
-    let anchor_output = TxOut {
-        value: Amount::from_sat(anchor_value),
-        script_pubkey: anchor_address.script_pubkey(),
-    };
-    let op_return_output = TxOut {
-        value: Amount::from_sat(0),
-        script_pubkey: Builder::new()
-            .push_opcode(OP_RETURN)
-            .push_slice(b"\xf0\x9f\xa5\xaa \xe2\x9a\x93 \xf0\x9f\xa5\xaa")
-            .into_script(),
-    };
-    let change_value_sat = input_value_sat - spend_value - fee;
-    let change_output = TxOut {
-        value: Amount::from_sat(change_value_sat),
-        script_pubkey: change_address.script_pubkey(),
-    };
+    let mut outputs = Vec::new();
+    let output_count = 50;
+    let per_output_value = (input_value_sat - fee) / output_count;
 
-    let outputs = vec![
-        ctv_output.clone(),
-        anchor_output.clone(),
-        op_return_output.clone(),
-        change_output.clone(),
-    ];
+    for _ in 0..output_count {
+        outputs.push(TxOut {
+            value: Amount::from_sat(per_output_value),
+            script_pubkey: ctv_spend_address.script_pubkey(),
+        });
+    }
 
     let ctv_hash = calc_ctv_hash(&outputs, None);
     let ctv_script = Builder::new()
