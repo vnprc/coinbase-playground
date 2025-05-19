@@ -3,7 +3,7 @@ use std::path::Path;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use bitcoin::{
     Address, Amount, Network, Transaction, TxOut, TxIn, OutPoint,
-    consensus::{Encodable, encode::serialize_hex},
+    consensus::{Encodable, encode::{serialize, serialize_hex}},
     hashes::{sha256, Hash},
     key::{Keypair, Secp256k1},
     script::Builder,
@@ -12,6 +12,7 @@ use bitcoin::{
 };
 
 use bitcoin::opcodes::all::OP_NOP4;
+
 const OP_CTV: Opcode = OP_NOP4;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,10 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (xonly_pubkey, _) = XOnlyPublicKey::from_keypair(&keypair);
 
     // hardcoded config
-    // TODO dynamically calculate fees
-    let estimated_vsize = 900;
-    let relay_fee_rate = 2;
-    let fee = estimated_vsize * relay_fee_rate;
+    // ⚠️ fee rate in sats/vbyte
+    let fee_rate = 1;
 
     let ctv_spend_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
 
@@ -47,13 +46,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let actual_coinbase_value = dummy_coinbase_tx.output[0].value.to_sat();
 
     // Now construct spend tx and CTV tree with real input amount
-    let (taproot_info, ctv_address, mut spend_tx, ctv_script) = build_ctv_contract(
-        &secp,
-        xonly_pubkey,
-        actual_coinbase_value,
-        fee,
-        &ctv_spend_address,
-    )?;
+    let (taproot_info, ctv_address, mut spend_tx, ctv_script) =
+        build_ctv_contract(&secp, xonly_pubkey, actual_coinbase_value, fee_rate, &ctv_spend_address)?;
 
     // Mine coinbase to actual CTV address
     println!("Mining to CTV contract address: {}", ctv_address);
@@ -102,13 +96,50 @@ fn build_ctv_contract(
     secp: &Secp256k1<bitcoin::secp256k1::All>,
     xonly: XOnlyPublicKey,
     input_value_sat: u64,
-    fee: u64,
+    fee_rate: u64,
     ctv_spend_address: &Address,
 ) -> Result<(TaprootSpendInfo, Address, Transaction, bitcoin::ScriptBuf), Box<dyn std::error::Error>> {
-    let mut outputs = Vec::new();
     let output_count = 50;
-    let per_output_value = (input_value_sat - fee) / output_count;
 
+    // Step 1: Build placeholder outputs to measure tx size
+    let mut dummy_outputs = vec![TxOut {
+        value: Amount::from_sat(0),
+        script_pubkey: ctv_spend_address.script_pubkey(),
+    }; output_count];
+
+    let dummy_ctv_hash = calc_ctv_hash(&dummy_outputs, None);
+    let dummy_ctv_script = Builder::new()
+        .push_slice(&dummy_ctv_hash)
+        .push_opcode(OP_CTV)
+        .into_script();
+
+    let dummy_taproot_info = TaprootBuilder::new()
+        .add_leaf(0, dummy_ctv_script.clone())
+        .unwrap()
+        .finalize(secp, xonly)
+        .unwrap();
+
+    let _dummy_address = Address::p2tr_tweaked(dummy_taproot_info.output_key(), Network::Regtest);
+
+    let mut dummy_tx = Transaction {
+        version: bitcoin::transaction::Version(3),
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint::null(),
+            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+            witness: bitcoin::Witness::default(),
+            script_sig: bitcoin::ScriptBuf::new(),
+        }],
+        output: dummy_outputs.clone(),
+    };
+
+    let vsize = serialize(&dummy_tx).len(); // Not exact but close enough for 1sat/vB
+    let fee = vsize as u64 * fee_rate;
+
+    // Step 2: Now calculate real output value and build final tx
+    let per_output_value = (input_value_sat - fee) / output_count as u64;
+
+    let mut outputs = vec![];
     for _ in 0..output_count {
         outputs.push(TxOut {
             value: Amount::from_sat(per_output_value),
