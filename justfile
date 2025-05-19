@@ -2,8 +2,11 @@ _default:
   @echo "Available commands:"
   @just --summary | tr ' ' '\n'
 
-mine_and_send:
+mine-and-send:
     cargo run -p scripts --bin mine_and_send
+
+mine-ctv-coinbase:
+    cargo run -p scripts --bin mine_ctv_coinbase
 
 build-esplora:
   rm -rf tmp-esplora esplora-frontend
