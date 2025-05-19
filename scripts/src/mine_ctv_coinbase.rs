@@ -6,14 +6,16 @@ use bitcoin::{
     consensus::{Encodable, encode::{serialize, serialize_hex}},
     hashes::{sha256, Hash},
     key::{Keypair, Secp256k1},
-    script::Builder,
+    script::{Builder, ScriptBuf},
     taproot::{TaprootBuilder, TaprootSpendInfo, LeafVersion},
     Opcode, XOnlyPublicKey, Sequence,
 };
 
-use bitcoin::opcodes::all::OP_NOP4;
+use bitcoin::opcodes::all::{OP_NOP4, OP_PUSHNUM_1};
 
 const OP_CTV: Opcode = OP_NOP4;
+const ANCHOR_VALUE: u64 = 330;
+const ANCHOR_PUSHBYTES: [u8; 2] = [0x4e, 0x73];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rpc = Client::new(
@@ -33,9 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (xonly_pubkey, _) = XOnlyPublicKey::from_keypair(&keypair);
 
     let fee_rate = 1;
+    let include_anchor = true;
 
     let ctv_spend_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
-    let anchor_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
 
     // ⚠️ Mine a dummy block to get the actual coinbase value
     let dummy_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
@@ -45,8 +47,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let actual_coinbase_value = dummy_coinbase_tx.output[0].value.to_sat();
 
     // Now construct spend tx and CTV tree with real input amount
-    let (taproot_info, ctv_address, mut spend_tx, ctv_script) =
-        build_ctv_contract(&secp, xonly_pubkey, actual_coinbase_value, fee_rate, &ctv_spend_address, &anchor_address)?;
+    let (taproot_info, ctv_address, mut spend_tx, ctv_script) = build_ctv_contract(
+        &secp,
+        xonly_pubkey,
+        actual_coinbase_value,
+        fee_rate,
+        &ctv_spend_address,
+        include_anchor,
+    )?;
 
     // Mine coinbase to actual CTV address
     println!("Mining to CTV contract address: {}", ctv_address);
@@ -61,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         txid: coinbase_txid,
         vout: 0,
     };
-
+    
     // Finalize witness
     let ctrl_block = taproot_info
         .control_block(&(ctv_script.clone(), LeafVersion::TapScript))
@@ -91,19 +99,28 @@ fn ensure_wallet(rpc: &Client, wallet_name: &str) -> Result<(), bitcoincore_rpc:
     Ok(())
 }
 
+fn anchor_output() -> TxOut {
+    TxOut {
+        value: Amount::from_sat(ANCHOR_VALUE),
+        script_pubkey: Builder::new()
+            .push_opcode(OP_PUSHNUM_1)
+            .push_slice(&ANCHOR_PUSHBYTES)
+            .into_script(),
+    }
+}
+
 fn build_ctv_contract(
     secp: &Secp256k1<bitcoin::secp256k1::All>,
     xonly: XOnlyPublicKey,
     input_value_sat: u64,
     fee_rate: u64,
     ctv_spend_address: &Address,
-    anchor_address: &Address,
-) -> Result<(TaprootSpendInfo, Address, Transaction, bitcoin::ScriptBuf), Box<dyn std::error::Error>> {
+    include_anchor: bool,
+) -> Result<(TaprootSpendInfo, Address, Transaction, ScriptBuf), Box<dyn std::error::Error>> {
     let output_count = 50;
-
-    let fee = calculate_fee_with_anchor(secp, xonly, fee_rate, output_count, ctv_spend_address, anchor_address)?;
-
-    let per_output_value = (input_value_sat - fee) / output_count as u64;
+    let fee = calculate_fee_with_anchor(secp, xonly, fee_rate, output_count, ctv_spend_address, include_anchor)?;
+    let reserved = if include_anchor { ANCHOR_VALUE } else { 0 };
+    let per_output_value = (input_value_sat - fee - reserved) / output_count as u64;
 
     let mut outputs = vec![];
 
@@ -114,13 +131,11 @@ fn build_ctv_contract(
         });
     }
 
-    outputs.push(TxOut {
-        value: Amount::from_sat(0),
-        script_pubkey: Builder::new()
-            .push_opcode(bitcoin::opcodes::all::OP_RETURN)
-            .push_slice([0xF0, 0x9F, 0xA5, 0xAA])
-            .into_script(),
-    });
+    if include_anchor {
+        outputs.push(anchor_output());
+    }
+
+    let actual_fee = input_value_sat - reserved - (per_output_value * output_count as u64);
 
     let ctv_hash = calc_ctv_hash(&outputs, None);
     let ctv_script = Builder::new()
@@ -157,17 +172,16 @@ fn calculate_fee_with_anchor(
     fee_rate: u64,
     output_count: usize,
     ctv_spend_address: &Address,
-    anchor_address: &Address,
+    include_anchor: bool,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let mut dummy_outputs = vec![TxOut {
         value: Amount::from_sat(0),
         script_pubkey: ctv_spend_address.script_pubkey(),
     }; output_count];
 
-    dummy_outputs.push(TxOut {
-        value: Amount::from_sat(0),
-        script_pubkey: anchor_address.script_pubkey(),
-    });
+    if include_anchor {
+        dummy_outputs.push(anchor_output());
+    }
 
     let dummy_ctv_hash = calc_ctv_hash(&dummy_outputs, None);
     let dummy_ctv_script = Builder::new()
@@ -196,7 +210,13 @@ fn calculate_fee_with_anchor(
     };
 
     let vsize = serialize(&dummy_tx).len();
-    Ok(vsize as u64 * fee_rate)
+    let base_fee = vsize as u64 * fee_rate;
+
+    // 🥒 add 1 sat per output to cover integer truncation loss during splitting
+    // TODO calculate the fee exactly
+    let padding = output_count as u64;
+
+    Ok(base_fee + padding)
 }
 
 fn calc_ctv_hash(outputs: &[TxOut], timeout: Option<u32>) -> [u8; 32] {
