@@ -219,13 +219,7 @@ fn calculate_fee_with_anchor(
             .serialize(),
     );
 
-    let raw_tx = serialize(&dummy_tx);
-    let vsize = rpc.test_mempool_accept(&[&dummy_tx])?
-        .into_iter()
-        .next()
-        .and_then(|res| res.vsize)
-        .unwrap_or(bitcoin::consensus::serialize(&dummy_tx).len() as u64);
-
+    let vsize = get_virtual_bytes(&dummy_tx) as u64;
     Ok(vsize * fee_rate)
 }
 
@@ -253,4 +247,19 @@ fn calc_ctv_hash(outputs: &[TxOut], timeout: Option<u32>) -> [u8; 32] {
     buffer.extend(0_u32.to_le_bytes()); // input index
 
     sha256::Hash::hash(&buffer).to_byte_array()
+}
+
+fn get_virtual_bytes(tx: &Transaction) -> usize {
+    let total_size = serialize(tx).len();
+
+    // Clone and strip all witness data to get base size
+    let mut base_tx = tx.clone();
+    for input in &mut base_tx.input {
+        input.witness.clear();
+    }
+    let base_size = serialize(&base_tx).len();
+
+    // weight = base * 3 + total
+    let weight = base_size * 3 + total_size;
+    (weight + 3) / 4
 }
