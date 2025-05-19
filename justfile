@@ -14,3 +14,7 @@ build-esplora:
   bash -c 'cd tmp-esplora && npm install && npm run dist'
   mv tmp-esplora/dist esplora-frontend
   rm -rf tmp-esplora
+
+reset-chain:
+  rm -rf ./data/regtest
+  @echo "🧹 Regtest chain wiped. Next run will start from block 0. Be sure to restart devenv."
