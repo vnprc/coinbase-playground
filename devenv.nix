@@ -65,6 +65,11 @@ in
   '';
 
   processes.esplora-ui.exec = ''
+    echo "───────────────────────────────────────────────"
+    echo " DON'T LISTEN TO HIS LIES, 5001 IS THE WRONG PORT"
+    echo " Open the UI at:      http://localhost:5000"
+    echo " Electrs API proxied: http://localhost:5000/api/* → 3000"
+    echo "───────────────────────────────────────────────"
     ${pkgs.nodePackages.serve}/bin/serve \
       -l 5001 \
       -s esplora-frontend
