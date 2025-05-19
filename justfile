@@ -5,8 +5,8 @@ _default:
 mine-and-send:
     cargo run -p scripts --bin mine_and_send
 
-mine-ctv-coinbase:
-    cargo run -p scripts --bin mine_ctv_coinbase
+mine-ctv-coinbase outputs="50":
+    cargo run -p scripts --bin mine_ctv_coinbase -- {{outputs}}
 
 build-esplora:
   rm -rf tmp-esplora esplora-frontend

@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 
 use bitcoincore_rpc::{Auth, Client, RpcApi};
@@ -18,6 +19,8 @@ const ANCHOR_VALUE: u64 = 330;
 const ANCHOR_PUSHBYTES: [u8; 2] = [0x4e, 0x73];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let output_count: usize = env::args().nth(1).unwrap_or("50".to_string()).parse()?;
+
     let rpc = Client::new(
         "http://127.0.0.1:18443",
         Auth::CookieFile(Path::new("./data/regtest/.cookie").to_path_buf()),
@@ -39,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctv_spend_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
 
-    // ⚠️ Mine a dummy block to get the actual coinbase value
+    // mine a dummy block to get the actual coinbase value
     let dummy_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
     let dummy_block = rpc.generate_to_address(1, &dummy_address)?[0];
     let dummy_txid = rpc.get_block(&dummy_block)?.txdata[0].txid();
@@ -54,9 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fee_rate,
         &ctv_spend_address,
         include_anchor,
+        output_count,
+        &rpc,
     )?;
 
-    // Mine coinbase to actual CTV address
     println!("Mining to CTV contract address: {}", ctv_address);
     let coinbase_block = rpc.generate_to_address(1, &ctv_address)?[0];
     let coinbase_txid = rpc.get_block(&coinbase_block)?.txdata[0].txid();
@@ -69,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         txid: coinbase_txid,
         vout: 0,
     };
-    
+
     // Finalize witness
     let ctrl_block = taproot_info
         .control_block(&(ctv_script.clone(), LeafVersion::TapScript))
@@ -116,9 +120,10 @@ fn build_ctv_contract(
     fee_rate: u64,
     ctv_spend_address: &Address,
     include_anchor: bool,
+    output_count: usize,
+    rpc: &Client,
 ) -> Result<(TaprootSpendInfo, Address, Transaction, ScriptBuf), Box<dyn std::error::Error>> {
-    let output_count = 50;
-    let fee = calculate_fee_with_anchor(secp, xonly, fee_rate, output_count, ctv_spend_address, include_anchor)?;
+    let fee = calculate_fee_with_anchor(secp, xonly, fee_rate, output_count, ctv_spend_address, include_anchor, rpc)?;
     let reserved = if include_anchor { ANCHOR_VALUE } else { 0 };
     let per_output_value = (input_value_sat - fee - reserved) / output_count as u64;
 
@@ -134,8 +139,6 @@ fn build_ctv_contract(
     if include_anchor {
         outputs.push(anchor_output());
     }
-
-    let actual_fee = input_value_sat - reserved - (per_output_value * output_count as u64);
 
     let ctv_hash = calc_ctv_hash(&outputs, None);
     let ctv_script = Builder::new()
@@ -173,6 +176,7 @@ fn calculate_fee_with_anchor(
     output_count: usize,
     ctv_spend_address: &Address,
     include_anchor: bool,
+    rpc: &Client,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let mut dummy_outputs = vec![TxOut {
         value: Amount::from_sat(0),
@@ -190,14 +194,12 @@ fn calculate_fee_with_anchor(
         .into_script();
 
     let dummy_taproot_info = TaprootBuilder::new()
-        .add_leaf(0, dummy_ctv_script)
+        .add_leaf(0, dummy_ctv_script.clone())
         .unwrap()
         .finalize(secp, xonly)
         .unwrap();
 
-    let _ = Address::p2tr_tweaked(dummy_taproot_info.output_key(), Network::Regtest);
-
-    let dummy_tx = Transaction {
+    let mut dummy_tx = Transaction {
         version: bitcoin::transaction::Version(3),
         lock_time: bitcoin::absolute::LockTime::ZERO,
         input: vec![TxIn {
@@ -209,14 +211,22 @@ fn calculate_fee_with_anchor(
         output: dummy_outputs,
     };
 
-    let vsize = serialize(&dummy_tx).len();
-    let base_fee = vsize as u64 * fee_rate;
+    dummy_tx.input[0].witness.push(dummy_ctv_script.to_bytes());
+    dummy_tx.input[0].witness.push(
+        dummy_taproot_info
+            .control_block(&(dummy_ctv_script.clone(), LeafVersion::TapScript))
+            .ok_or("failed to get control block")?
+            .serialize(),
+    );
 
-    // 🥒 add 1 sat per output to cover integer truncation loss during splitting
-    // TODO calculate the fee exactly
-    let padding = output_count as u64;
+    let raw_tx = serialize(&dummy_tx);
+    let vsize = rpc.test_mempool_accept(&[&dummy_tx])?
+        .into_iter()
+        .next()
+        .and_then(|res| res.vsize)
+        .unwrap_or(bitcoin::consensus::serialize(&dummy_tx).len() as u64);
 
-    Ok(base_fee + padding)
+    Ok(vsize * fee_rate)
 }
 
 fn calc_ctv_hash(outputs: &[TxOut], timeout: Option<u32>) -> [u8; 32] {
