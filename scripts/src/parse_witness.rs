@@ -55,11 +55,19 @@ fn print_input_analysis(
     let vout = input.previous_output.vout;
 
     let prev_tx = rpc.get_raw_transaction(&prev_txid, None)?;
-    let spk = prev_tx.output[vout as usize].script_pubkey.clone();    
+    let spent_output = &prev_tx.output[vout as usize];
+    let spk = &spent_output.script_pubkey;
 
-    // Classify input type
-    let spend_type = classify_spk(&spk);
+    let spend_type = classify_spk(spk);
     println!("  scriptPubKey type: {spend_type}");
+
+    let contains_ctv = spk.instructions().any(|i| {
+        matches!(i, Ok(Instruction::Op(op)) if op == OP_CTV)
+    });
+
+    if contains_ctv {
+        println!("  💡 This input spends an OP_CTV contract (CTV spend). Look for OP_NOP4 in Esplora!");
+    }
 
     match spend_type.as_str() {
         "p2tr" => {
