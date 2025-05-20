@@ -17,13 +17,13 @@ To run Coinbase Playground, first clone the repository and follow the instructio
 Once set up, cd into the `coinbase-playground` directory and run:
 
 ```sh
-devenv up
+devenv up --impure
 ```
 
-Open another tab and run
+This will take a while to run. It's building bitcoin core from source, among other things. When it finishes open another tab and run
 
 ```sh
-devenv shell
+devenv shell --impure
 ```
 
 Once running:
