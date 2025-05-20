@@ -1,10 +1,12 @@
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use bitcoin::{
-    Txid, TxIn, script::ScriptBuf,
+    Txid, TxIn, ScriptBuf, Address,
     opcodes::all::OP_NOP4,
+    blockdata::script::Instruction,
     Opcode,
 };
 use std::{env, path::Path};
+use hex;
 
 const OP_CTV: Opcode = OP_NOP4;
 
@@ -24,11 +26,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match maybe_index {
         Some(index_str) => {
             let index: usize = index_str.parse()?;
-            print_witness(&txid, index, &tx.input)?;
+            print_input_analysis(&rpc, &txid, index, &tx.input[index])?;
         }
         None => {
-            for (i, _) in tx.input.iter().enumerate() {
-                print_witness(&txid, i, &tx.input)?;
+            for (i, input) in tx.input.iter().enumerate() {
+                print_input_analysis(&rpc, &txid, i, input)?;
             }
         }
     }
@@ -36,47 +38,97 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn print_witness(
+fn print_input_analysis(
+    rpc: &Client,
     txid: &Txid,
-    input_index: usize,
-    inputs: &[TxIn],
+    index: usize,
+    input: &TxIn,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input = &inputs[input_index];
+    println!("input[{index}] analysis for txid {txid}:\n");
 
-    println!("input[{input_index}] witness script for txid {txid}:\n");
+    if input.previous_output.is_null() {
+        println!("  Coinbase input (no prevout)\n");
+        return Ok(());
+    }
 
-    match input.witness.len() {
-        0 => {
-            println!("  No witness data\n");
+    let prev_txid = input.previous_output.txid;
+    let vout = input.previous_output.vout;
+
+    let prev_tx = rpc.get_raw_transaction(&prev_txid, None)?;
+    let spk = prev_tx.output[vout as usize].script_pubkey.clone();    
+
+    // Classify input type
+    let spend_type = classify_spk(&spk);
+    println!("  scriptPubKey type: {spend_type}");
+
+    match spend_type.as_str() {
+        "p2tr" => {
+            if input.witness.len() == 1 {
+                println!("  Key-path spend (schnorr sig only)\n");
+            } else if input.witness.len() >= 2 {
+                println!("  Script-path spend (tapleaf)\n");
+                parse_script_witness(&input.witness[0])?;
+            } else {
+                println!("  Unexpected witness layout\n");
+            }
         }
-        1 => {
-            println!("  Taproot key-path spend (Schnorr sig only). No script present.\n");
+        "p2wpkh" | "p2sh-p2wpkh" => {
+            println!("  SegWit key spend (P2WPKH or P2SH-P2WPKH), no script\n");
+        }
+        "p2wsh" => {
+            println!("  Witness script spend (P2WSH)\n");
+            parse_script_witness(&input.witness.last().unwrap())?;
         }
         _ => {
-            let witness_script = &input.witness[0];
-            let script = ScriptBuf::from_bytes(witness_script.to_vec());
+            println!("  Unknown or non-segwit input type\n");
+        }
+    }
 
-            for instr in script.instructions() {
-                match instr {
-                    Ok(bitcoin::blockdata::script::Instruction::Op(op)) if op == OP_CTV => {
-                        println!("  Op(OP_CTV)");
-                    }
-                    Ok(bitcoin::blockdata::script::Instruction::Op(op)) => {
-                        println!("  Op({:?})", op);
-                    }
-                    Ok(bitcoin::blockdata::script::Instruction::PushBytes(bytes)) => {
-                        println!("  PushBytes(0x{})", hex::encode(bytes.as_bytes()));
-                    }
-                    Err(e) => {
-                        println!("  Error parsing instruction: {:?}", e);
-                    }
-                }
+    println!();
+    Ok(())
+}
+
+fn parse_script_witness(witness_bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    let script = ScriptBuf::from_bytes(witness_bytes.to_vec());
+
+    println!("  Disassembled script:");
+
+    for instr in script.instructions() {
+        match instr {
+            Ok(Instruction::Op(op)) if op == OP_CTV => {
+                println!("    Op(OP_CTV)");
             }
-
-            println!();
+            Ok(Instruction::Op(op)) => {
+                println!("    Op({:?})", op);
+            }
+            Ok(Instruction::PushBytes(bytes)) => {
+                println!("    PushBytes(0x{})", hex::encode(bytes.as_bytes()));
+            }
+            Err(e) => {
+                println!("    Error parsing instruction: {:?}", e);
+            }
         }
     }
 
     Ok(())
 }
 
+fn classify_spk(spk: &ScriptBuf) -> String {
+    if let Ok(addr) = Address::from_script(spk, bitcoin::Network::Regtest) {
+        match addr.payload() {
+            bitcoin::address::Payload::WitnessProgram(witprog) => {
+                match (witprog.version(), witprog.program().len()) {
+                    (bitcoin::WitnessVersion::V0, 20) => "p2wpkh",
+                    (bitcoin::WitnessVersion::V0, 32) => "p2wsh",
+                    (bitcoin::WitnessVersion::V1, 32) => "p2tr",
+                    _ => "unknown-witness",
+                }                
+            }
+            bitcoin::address::Payload::ScriptHash(_) => "p2sh",
+            bitcoin::address::Payload::PubkeyHash(_) => "p2pkh",
+            _ => "other",
+        }
+    } else {
+        "nonstandard"
+    }.to_string()
+}
