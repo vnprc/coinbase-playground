@@ -7,6 +7,7 @@ edition = "2021"
 bitcoincore-rpc = "0.18"
 bitcoin = "0.31"
 rand = "0.8"
+hex = "0.4"
 
 [[bin]]
 name = "mine_and_send"
@@ -15,3 +16,7 @@ path = "src/mine_and_send.rs"
 [[bin]]
 name = "mine_ctv_coinbase"
 path = "src/mine_ctv_coinbase.rs"
+
+[[bin]]
+name = "parse_witness"
+path = "src/parse_witness.rs"

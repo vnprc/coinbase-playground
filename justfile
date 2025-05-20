@@ -18,3 +18,6 @@ build-esplora:
 reset-chain:
   rm -rf ./data/regtest
   @echo "🧹 Regtest chain wiped. Next run will start from block 0. Be sure to restart devenv."
+
+parse-witness txid index="0":
+    cargo run -p scripts --bin parse_witness -- {{txid}} {{index}}
