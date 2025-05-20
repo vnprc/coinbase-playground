@@ -36,11 +36,11 @@ Once running:
 
 | Command                                | Description                                                  |
 |----------------------------------------|--------------------------------------------------------------|
-| `just mine-and-send`                   | Mine initial coins and send 1 BTC to a new address           |
-| `just mine-ctv-coinbase`               | Mine and spend a CTV coinbase transaction |
-| `just mine-ctv-coinbase outputs 25`    | Mine and spend a CTV with 25 outputs                   |
-| `just build-esplora`                   | Clone and build the Esplora frontend                         |
-| `just reset-chain`                     | Wipe chain data and reset to block 0                         |
+| `just mine-and-send`           | Mine initial coins and send 1 BTC to a new address |
+| `just mine-ctv-coinbase`       | Mine and spend a CTV coinbase transaction |
+| `just mine-ctv-coinbase 25`    | Mine and spend a CTV coinbase with 25 outputs |
+| `just build-esplora`           | Clone and build the Esplora frontend |
+| `just reset-chain`             | Wipe chain data and reset to block 0 |
 
 ---
 
