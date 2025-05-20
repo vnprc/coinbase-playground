@@ -38,13 +38,14 @@ Once running:
 
 | Command                                | Description                                                  |
 |----------------------------------------|--------------------------------------------------------------|
-| `just mine-and-send`                | Mine initial coins and send 1 BTC to a new address |
-| `just mine-ctv-coinbase`            | Mine and spend a CTV coinbase transaction |
-| `just mine-ctv-coinbase <outputs>`  | Mine and spend a CTV coinbase with 25 outputs |
-| `just build-esplora`                | Clone and build the Esplora frontend |
-| `just reset-chain`                  | Wipe chain data and reset to block 0 |
-| `just parse-witness <txid>`         | Parse all input witness scripts for a transaction |
-| `just parse-witness <txid> <index>` | Parse one input witness script for a transaction |
+| `mine-and-send`                | Mine initial coins and send 1 BTC to a new address |
+| `mine-ctv-coinbase`            | Mine and spend a CTV coinbase transaction |
+| `mine-ctv-coinbase <outputs>`  | Mine and spend a CTV coinbase with 25 outputs |
+| `build-esplora`                | Clone and build the Esplora frontend |
+| `reset-chain`                  | Wipe chain data and reset to block 0 |
+| `parse-witness <txid>`         | Parse all input witness scripts for a transaction |
+| `parse-witness <txid> <index>` | Parse one input witness script for a transaction |
+| `mine-layered-ctv-coinbase`    | Mine and spend a 2 level CTV tree |
 
 ---
 
