@@ -20,6 +20,8 @@ Once set up, cd into the `coinbase-playground` directory and run:
 devenv up --impure
 ```
 
+Note: electrs [doesn't build on mac](https://github.com/vnprc/coinbase-playground/issues/1). If this is a problem for you, you should fix it and open a PR. (Or get a real dev machine. =P)
+
 This will take a while to run. It's building bitcoin core from source, among other things. When it finishes open another tab and run
 
 ```sh
