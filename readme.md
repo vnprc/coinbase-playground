@@ -111,14 +111,61 @@ There are two downsides:
 
 This repo is a tool to explore the possibilities of different coinbase structures. Once I got the custom bitcoin node and block explorer working (which was no small feat 😅) I built two payout mechanisms: a flat tree structure, and a layered binary tree.
 
-### Flat Payout Tree
+## 🌴 Flat Payout Tree
 
-The flat payout is intended to be broadcast to the mempool immediately with a 1 sat/vb fee taken from the miner payout. It also includes a 330 sat anchor output that anyone can spend to fee bump the transaction. Users could potentially crowdsource the fee transaction using sighash_anyonecanpay. This solution solves the data availability problem by avoiding nested CTV transactions and immediately broadcasting the CTV spend to the mempool after the block is mined. The transaction will sit in the mempool for 100 blocks and get mined as soon as prevailing fee rates are low enough. Users can bump the fees if they don't want to wait. My testing showed 319 possible outputs for this transaction before running against TRUC policy limits. Not too bad!
+The flat payout is intended to be broadcast to the mempool immediately with a 1 sat/vb fee taken from the coinbase reward. It also includes a 330 sat anchor output that anyone can spend to fee bump the transaction. Users could potentially crowdsource the fee transaction using `SIGHASH_ANYONECANPAY`. This solution solves the data availability problem by avoiding nested CTV transactions and immediately broadcasting the CTV spend to the mempool after the block is mined. The transaction will sit in the mempool for 100 blocks and get mined as soon as prevailing fee rates are low enough. Users can bump the fees if they don't want to wait. My testing showed an upper limit of 319 payout outputs for this transaction before running against TRUC transaction size policy limits. Not too bad!
 
-### Layered Payout Tree
+```sh
+(devenv) bash-5.2$ just mine-ctv-coinbase 12
+cargo run -p scripts --bin mine_ctv_coinbase -- 12
+...
+Mining to CTV contract address: bcrt1p5uhmqtuymnfryf8zjjv99dsvl9kr7kjvnwemj46fpq244ps5uksqfvek9m
+Spending tx: 03000000000101d7016d67a893c77ef4dadccfa5ec90e14bf9c26d2d5d0e4c0e173a21667aca200000000000fdffffff0de9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35ee9d3d518000000001600148d8cbed03aafe3940d06df99eff965ad47b5f35e4a010000000000000451024e73022220d7b6a27dee682eca6be8bc06d8d9232585ab156f86082cf707473e20b511494db321c11eba5fe7fad9d6a7676350866e2bb23662c352f96bcb8b79555ca1c2ed39e71f00000000
+Broadcasted txid: 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f
+Mined txid: 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f
+```
 
-The layered tree structure is a much more complicated proposition. I built a simple binary tree with 2 layers and 4 leaves. Each transaction carries a fixed 500 sat fee. I did not have time to iterate further but I think the next steps are to replace the fixed fee with 0-value anchor outputs, make the number of leaves, depth of the tree, and the radix (number of children per parent node) configurable.
+![alt text](<Screenshot from 2025-05-20 18-41-57.png>)
 
-### Endgame
+The outputs all pay to the same address but just pretend they are different lol. You can see the CTV script using the `just parse-witness` script. I wrote this script because esplora doesn't parse the input witness script and I wanted to see the OP_CTV script for myself.
 
-I think the end game is to create a tree with an n of n musig locking script at each node. Then the owners of the leaves could spend the 100 blocks after confirmation trading outputs to consolidate the tree into fewer nodes. For example, if you swap off-chain funds for the signature of your leaf's siblings you can collapse the subtree by one level and get a larger on-chain payout. This use case fits perfectly with the P2Pool reboot as Kulpreet explains in this [blog post](https://blog.opdup.com/2025/02/26/trading-shares-for-bitcoin-user-story.html).
+```sh
+(devenv) bash-5.2$ just parse-witness 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f
+cargo run -p scripts --bin parse_witness -- 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f 0
+...
+input[0] analysis for txid 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f:
+
+  scriptPubKey type: p2tr
+  Script-path spend (tapleaf)
+
+  Disassembled script:
+    PushBytes(0xd7b6a27dee682eca6be8bc06d8d9232585ab156f86082cf707473e20b511494d)
+    Op(OP_CTV)
+```
+
+## 🌲 Layered Payout Tree
+
+The layered tree structure is a much more complicated proposition. I built a simple binary tree with 2 layers and 4 leaves. Each transaction carries a fixed 500 sat fee. I did not have time to iterate further but I think the next steps are to replace the fixed fee with 0-value anchor outputs, make the number of leaves, depth of the tree, and the radix (number of children per parent node) configurable. This tree structure is strictly worse for mining pool payouts than the flat structure, but it is a stepping stone to more awesomer features.
+
+```sh
+(devenv) bash-5.2$ just mine-layered-ctv-coinbase
+cargo run -p scripts --bin mine_layered_ctv_coinbase
+...
+Mining to: bcrt1pyu95vzyhv5wzw0knt4306nzd08444q6nrfg2gqln4z8h6jpdcn4s6e87d9
+Spend tx: 0300000000010135e272debe4ff3d32138c7dd248b2fbc9e7c3b69a32f2630a31acdfd9caedd500000000000fdffffff0212f6029500000000222053a995c4b1b5ee4b1a7b14fe1a8aaa69d8bad8365b1c41c804eceaf03cf334e4b312f60295000000002220ee1b7e0ce5a96400f31fd0727c0c76884a2bb451f4a454240acee9d15854c4a1b30222205133a9cf8b3fc41cab69eb81cee6ce4e5e6e54c09cf400d47cc5bc00aa7e43fdb321c025bac28b52f7c13541189b9403a4644a98a75466fdd8f319128012366f11bce000000000
+Broadcast root txid: 757a278dc29d25f57043c897a3463fbd3c71e21b8e7a5c45fc92e0e0f56939a0
+Left child tx: 0300000001a03969f5e0e092fc455c7a8e1be2713cbd3f46a397c84370f5259dc28d277a750000000000fdffffff020f7a814a0000000016001479ba9fe5ce2387a5bca741d88e36cf050191af860f7a814a00000000160014884a09b4b3b3fbd43334c89a3dce0f08c3c4704000000000
+Right child tx: 0300000001a03969f5e0e092fc455c7a8e1be2713cbd3f46a397c84370f5259dc28d277a750100000000fdffffff020f7a814a00000000160014455e4528a8fda28fa442fde9347a7b2cbdf57eb50f7a814a00000000160014a76cd9c0a9582a1ad83ec09491b7a849551194f300000000
+Mined child txids: 5ea40581e3cb0f35b746700907fe2c79250868dfe7a5f7dded4890a207609fe4, 0359b10aeb783da68f1cd6d6e745d04e66107f4ba09aa9f0b6f3a969100fb323
+```
+
+![alt text](<Screenshot from 2025-05-20 18-48-02.png>)
+![alt text](<Screenshot from 2025-05-20 18-47-38.png>)
+
+Notice the `OP_NOP4` in the scriptPubKey in the top right of the first image. This is `OP_CTV` by anther name. Esplora isn't aware of the CTV activation code running in the bitcoin node so it prints the opcode that CTV overrides. You can see `OP_NOP4` on the prevout script on the left side of the lower image.
+
+## 🚀 Endgame
+
+I think the end game is to create a tree with an n of n musig locking script at each node. Then the owners of the leaves could spend the 100 blocks after confirmation trading outputs to consolidate the tree into fewer nodes. For example, if you swap off-chain funds for the signature(s) of your leaf's sibling(s) you can collapse the subtree by one level and get a larger on-chain payout with less transactions. This use case fits very nicely with the P2Pool reboot as Kulpreet explains in this [blog post](https://blog.opdup.com/2025/02/26/trading-shares-for-bitcoin-user-story.html).
+
+I intend to continue using this playground to explore what's possible when you control the coinbase. I think there is a whole world of use cases to discover, as I explain in [this talk](https://www.youtube.com/watch?app=desktop&v=F2p_V0svDTo&t=3h15m30s).
