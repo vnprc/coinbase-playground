@@ -127,7 +127,7 @@ Mined txid: 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f
 
 ![Screenshot from 2025-05-20 18-41-57](https://github.com/user-attachments/assets/fa03682e-ac29-4805-bb9f-6e0874f63bed)
 
-The outputs all pay to the same address but just pretend they are different lol. You can see the CTV script using the `just parse-witness` script. I wrote this script because esplora doesn't parse the input witness script and I wanted to see the OP_CTV script for myself.
+The outputs all pay to the same address but just pretend they are different lol. You can see the CTV script using the `just parse-witness` script. I wrote this script because esplora doesn't parse the input witness script and I wanted to see the `OP_CTV` script for myself.
 
 ```sh
 (devenv) bash-5.2$ just parse-witness 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f
