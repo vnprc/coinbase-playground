@@ -125,7 +125,7 @@ Broadcasted txid: 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa474
 Mined txid: 5e7542ea2b7a7802a99a53e38ce6df48853de99bb9d6380a07d257afefa4746f
 ```
 
-![alt text](<Screenshot from 2025-05-20 18-41-57.png>)
+![Screenshot from 2025-05-20 18-41-57](https://github.com/user-attachments/assets/fa03682e-ac29-4805-bb9f-6e0874f63bed)
 
 The outputs all pay to the same address but just pretend they are different lol. You can see the CTV script using the `just parse-witness` script. I wrote this script because esplora doesn't parse the input witness script and I wanted to see the OP_CTV script for myself.
 
@@ -159,10 +159,10 @@ Right child tx: 0300000001a03969f5e0e092fc455c7a8e1be2713cbd3f46a397c84370f5259d
 Mined child txids: 5ea40581e3cb0f35b746700907fe2c79250868dfe7a5f7dded4890a207609fe4, 0359b10aeb783da68f1cd6d6e745d04e66107f4ba09aa9f0b6f3a969100fb323
 ```
 
-![alt text](<Screenshot from 2025-05-20 18-48-02.png>)
-![alt text](<Screenshot from 2025-05-20 18-47-38.png>)
+![Screenshot from 2025-05-20 18-48-02](https://github.com/user-attachments/assets/45f4f764-c8f9-4321-8f28-260c15f09f83)
+![Screenshot from 2025-05-20 18-47-38](https://github.com/user-attachments/assets/84fe5a51-7924-445b-8923-70dff7b190f5)
 
-Notice the `OP_NOP4` in the scriptPubKey in the top right of the first image. This is `OP_CTV` by anther name. Esplora isn't aware of the CTV activation code running in the bitcoin node so it prints the opcode that CTV overrides. You can see `OP_NOP4` on the prevout script on the left side of the lower image.
+Notice the `OP_NOP4` in the scriptPubKey in the top right of the first image. This is `OP_CTV` by anther name. Esplora isn't aware of the CTV activation code running in the bitcoin node so it prints the opcode that CTV overrides. You can also see `OP_NOP4` on the prevout script on the left side of the lower image.
 
 ## 🚀 Endgame
 
