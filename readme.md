@@ -3,10 +3,10 @@
 This repository sets up a full regtest environment for experimenting with [`OP_CHECKTEMPLATEVERIFY`](https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki) and [`OP_CHECKSIGFROMSTACK`](https://github.com/bitcoin/bips/blob/master/bip-0348.md) using:
 
 - [bitcoin-garrys-mod](https://github.com/average-gary/bitcoin-garrys-mod): a custom Bitcoin Core fork with CTV+CSFS enabled
-- electrs + esplora browser based blockchain explorer
-- Rust script to generate a CTV coinbase and spend from it
+- [esplora + electrs](https://github.com/blockstream/electrs?ref=new-index) blockchain indexer and browser UI
+- rust script to generate a CTV coinbase and spend from it
   - shoutout to stutxo for the [inspiration](https://github.com/stutxo/simple_ctv)
-- A `justfile` to simplify common actions
+- `justfile` to simplify common actions
 
 ---
 
@@ -16,13 +16,13 @@ To run Coinbase Playground, first clone the repository and follow the instructio
 
 Once set up, cd into the `coinbase-playground` directory and run:
 
-```
+```sh
 devenv up
 ```
 
 Open another tab and run
 
-```
+```sh
 devenv shell
 ```
 
@@ -46,7 +46,7 @@ Once running:
 
 ## 🔍 Explore Transactions
 
-After running `mine-ctv-coinbase`, you can explore transactions via:
+You can explore the blockchain and transactions via:
 
 - **UI**: [http://localhost:5000](http://localhost:5000)
 - **API**: `curl http://localhost:5000/api/tx/<txid>`
