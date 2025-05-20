@@ -20,3 +20,7 @@ path = "src/mine_ctv_coinbase.rs"
 [[bin]]
 name = "parse_witness"
 path = "src/parse_witness.rs"
+
+[[bin]]
+name = "mine_layered_ctv_coinbase"
+path = "src/mine_layered_ctv_coinbase.rs"

@@ -21,3 +21,6 @@ reset-chain:
 
 parse-witness txid index="0":
     cargo run -p scripts --bin parse_witness -- {{txid}} {{index}}
+
+mine-layered-ctv-coinbase:
+    cargo run -p scripts --bin mine_layered_ctv_coinbase
