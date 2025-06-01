@@ -94,14 +94,14 @@ Every mining pool today, with the exception of [Ocean](https://ocean.xyz), is a 
 
 It doesn't have to be this way. Pools could pay out to their largest miners directly in the coinbase (the first transaction of each block where new bitcoin originates). Ocean does this, but they are severely limited in the amount of outputs they can put in the coinbase. One problem is that making the coinbase larger takes away from the potential transaction fees. A much bigger problem, though, is miner firmware restrictions.
 
-Antmain, the largest ASIC manufacturer by far, limits the size of the coinbase transaction in their miner firmware. They put this limit in place to stifle competition from decentralized alternatives. And it worked! The decentralized mining software P2Pool died a slow death, in large part due to Antminer firmware restrictions.
+Bitmain, the largest ASIC manufacturer by far, limits the size of the coinbase transaction in their miner firmware. They put this limit in place to stifle competition from decentralized alternatives. And it worked! The decentralized mining software P2Pool died a slow death, in large part due to Antminer firmware restrictions.
 
 Ocean is the only pool that bothers to work around this limitation to provide non-custodial payouts for their customers. In [this talk](https://www.youtube.com/watch?v=EKQvDfmQkt8&t=8910s) at 3:03:00 Jason Hughes details the extensive measures they take to make it work. They fingerprint the hardware in use by their miners and keep track of multiple work templates based on the results. They also have to be very loose with the validation of miner submitted blocks because there's no telling what the coinbase will look like until after the block is found. This is a really tough and completely unnecessary engineering problem.
 
 CTV coinbase transactions eliminate this problem. With CTV we can construct a large transaction tree with a great number of outputs and commit to the entire payout structure in a very small transaction footprint.
 
 There are three big wins, in order of importance:
-1. Break Antmain's stranglehold on the coinbase. gfy Jihan!
+1. Break Bitmain's stranglehold on the coinbase. gfy Jihan!
 1. Enable non-custodial mining pools at any scale of operation
 1. Maximize fee revenue in each block the pool mines
 
