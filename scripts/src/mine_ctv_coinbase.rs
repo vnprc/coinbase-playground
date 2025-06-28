@@ -130,9 +130,10 @@ fn build_ctv_contract(
     let mut outputs = vec![];
 
     for _ in 0..output_count {
+        let unique_address = rpc.get_new_address(None, None)?.require_network(Network::Regtest)?;
         outputs.push(TxOut {
             value: Amount::from_sat(per_output_value),
-            script_pubkey: ctv_spend_address.script_pubkey(),
+            script_pubkey: unique_address.script_pubkey(),
         });
     }
 
